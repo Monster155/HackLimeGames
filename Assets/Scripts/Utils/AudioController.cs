@@ -20,6 +20,7 @@ namespace Progression
             }
             else
             {
+                Debug.Log("There is more than one AudioController - removing this one");
                 Destroy(gameObject);
             }
         }
