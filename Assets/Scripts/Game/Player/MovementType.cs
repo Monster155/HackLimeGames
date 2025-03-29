@@ -5,5 +5,7 @@
         AsPawn,
         HorAndVer,
         Diagonal,
+        AllSide,
+        Horse,
     }
 }
