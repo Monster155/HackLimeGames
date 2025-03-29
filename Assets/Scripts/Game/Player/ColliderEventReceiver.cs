@@ -14,5 +14,12 @@ namespace Game.Player
         private void OnCollisionExit(Collision other) => OnCollisionExitReceive?.Invoke(other);
         private void OnTriggerEnter(Collider other) => OnTriggerEnterReceive?.Invoke(other);
         private void OnTriggerExit(Collider other) => OnTriggerExitReceive?.Invoke(other);
+
+        public Collider Collider { get; private set; }
+
+        private void Awake()
+        {
+            Collider = GetComponent<Collider>();
+        }
     }
 }
