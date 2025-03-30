@@ -176,7 +176,7 @@ GameObject:
   - component: {fileID: 5820746748300927249}
   - component: {fileID: 6381681362811149550}
   m_Layer: 0
-  m_Name: Enemy
+  m_Name: RookEnemy
   m_TagString: Enemy
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -213,3 +213,6 @@ MonoBehaviour:
   _animator: {fileID: 8492171614692863703}
   _stepTime: 1
   _stepDelayTime: 0.2
+  _movementType: 1
+  _hp: 3
+  _damage: 100

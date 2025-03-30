@@ -1,4 +1,6 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
+using System.Linq;
 using Game.Player;
 using Game.Utils;
 using UnityEngine;
@@ -9,9 +11,21 @@ namespace Game.Enemies
 {
     public class EnemyMovement : MonoBehaviour
     {
+        // TODO combine Player and Enemy movements due to same code
+
+        private readonly int MaxMoveDistance = 4;
+        private readonly Vector2Int[] HorAndVerVectors = { Vector2Int.up, Vector2Int.right, Vector2Int.down, Vector2Int.left };
+        private readonly Vector2Int[] DiaglonalVectors = { new Vector2Int(1, 1), new Vector2Int(-1, 1), new Vector2Int(1, -1), new Vector2Int(-1, -1) };
+        private readonly Vector2Int[] HorseVectors =
+        {
+            new Vector2Int(2, 1), new Vector2Int(2, -1), new Vector2Int(-2, 1), new Vector2Int(-2, -1), new Vector2Int(1, 2), new Vector2Int(-1, 2), new Vector2Int(1, -2),
+            new Vector2Int(-1, -2)
+        };
+
         [SerializeField] private Animator _animator;
         [SerializeField] private float _stepTime = 1f;
         [SerializeField] private float _stepDelayTime = 0.2f;
+        [SerializeField] private MovementType _movementType = MovementType.AsPawn;
         [SerializeField] private int _hp = 3;
         [SerializeField] private int _damage = 1;
 
@@ -19,10 +33,12 @@ namespace Game.Enemies
         public float TotalStepTime => _stepTime + _stepDelayTime;
 
         private float _stepDelayTimer;
+        private Vector2Int[] _directionVectors;
 
         private void Start()
         {
             _stepDelayTimer = TotalStepTime;
+            _directionVectors = GetMoveDirection();
         }
 
         private void Update()
@@ -53,7 +69,7 @@ namespace Game.Enemies
             if (GetMoveDirection(out Vector3 moveDirection))
             {
                 _animator.transform.rotation = Quaternion.LookRotation(moveDirection);
-                
+
                 if (Vector3.Distance(player.transform.position, transform.position + moveDirection) < 0.8f)
                     Attack(moveDirection, player);
                 else
@@ -65,25 +81,10 @@ namespace Game.Enemies
         {
             moveDirection = Vector3.zero;
 
-            int h = Random.Range(-1, 2);
-            int v = Random.Range(-1, 2);
+            Vector2Int selectedVector = _directionVectors[Random.Range(0, _directionVectors.Length)];
 
-            if (h == 0 && v == 0)
-                return false;
-
-            int x = h switch
-            {
-                > 0 => 1,
-                < 0 => -1,
-                _ => 0
-            };
-
-            int y = v switch
-            {
-                > 0 => 1,
-                < 0 => -1,
-                _ => 0
-            };
+            int x = Random.Range(0, selectedVector.x + 1);
+            int y = Random.Range(0, selectedVector.y + 1);
 
             Vector3 forward = new Vector3(transform.forward.x, 0, transform.forward.z).normalized;
             Vector3 right = new Vector3(transform.right.x, 0, transform.right.z).normalized;
@@ -101,6 +102,19 @@ namespace Game.Enemies
         {
             _animator.SetTrigger(AnimHashes.MoveHash);
             StartCoroutine(MoveCoroutine(moveDirection));
+        }
+
+        private Vector2Int[] GetMoveDirection()
+        {
+            return _movementType switch
+            {
+                MovementType.AsPawn => HorAndVerVectors,
+                MovementType.HorAndVer => HorAndVerVectors.Select(v => v * MaxMoveDistance).ToArray(),
+                MovementType.Diagonal => DiaglonalVectors.Select(v => v * MaxMoveDistance).ToArray(),
+                MovementType.AllSide => HorAndVerVectors.Concat(DiaglonalVectors).Select(v => v * MaxMoveDistance).ToArray(),
+                MovementType.Horse => HorseVectors,
+                _ => throw new ArgumentOutOfRangeException()
+            };
         }
 
         private IEnumerator AttackCoroutine(Vector3 moveDirection, PlayerMovement player)

@@ -31,12 +31,12 @@ namespace Game.Player
         [SerializeField] private float _mouseSensitivity = 2f;
         [SerializeField] private Vector2 _verticalAngleLimits = new Vector2(-5f, 80f);
         [SerializeField] private MovementType _movementType = MovementType.AsPawn;
-        [SerializeField] private Transform _moveMarker;
+        [SerializeField] private MoveMarker _moveMarker;
         [SerializeField] private ColliderEventReceiver _enemyDetector;
         [SerializeField] private int _hp = 5;
         [SerializeField] private int _damage = 1;
 
-        public bool CanMove = true; // sets from StepManager
+        public bool CanMove { get; set; } = true; // sets from StepManager
         private float TotalStepTime => _stepTime + _stepDelayTime;
 
         private Vector3 _verticalRotation = Vector3.zero;
@@ -109,8 +109,9 @@ namespace Game.Player
             if (_isMoving)
                 return;
 
-            _moveMarker.localPosition = transform.position + GetMoveDirection();
-            _enemyDetector.transform.position = _moveMarker.position;
+            Vector3 newPos = transform.position + GetMoveDirection();
+            _moveMarker.UpdateContent(newPos);
+            _enemyDetector.transform.position = newPos;
         }
 
         private IEnumerator MoveCoroutine(Vector3 moveDirection)
