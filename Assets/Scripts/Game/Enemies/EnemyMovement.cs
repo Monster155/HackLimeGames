@@ -27,14 +27,17 @@ namespace Game.Enemies
         [SerializeField] private int _damage = 1;
         [SerializeField] private Collider _collider;
         [SerializeField] private int _chanceToAfk = 10;
+        [SerializeField] private int _jumpRadius = 3;
 
         private bool CanMove => _hp > 0;
 
         private float _stepDelayTimer;
         private Vector2Int[] _directionVectors;
+        private Vector3 _startPos;
 
         private void Start()
         {
+            _startPos = transform.position;
             _stepDelayTimer = GlobalGameSettings.TotalStepTime;
             _directionVectors = GetMoveDirection();
         }
