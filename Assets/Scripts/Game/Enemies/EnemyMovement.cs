@@ -26,6 +26,7 @@ namespace Game.Enemies
         [SerializeField] private int _hp = 3;
         [SerializeField] private int _damage = 1;
         [SerializeField] private Collider _collider;
+        [SerializeField] private int _chanceToAfk = 10;
 
         private bool CanMove => _hp > 0;
 
@@ -78,14 +79,14 @@ namespace Game.Enemies
         {
             Vector2Int selectedVector = _directionVectors[Random.Range(0, _directionVectors.Length)];
 
-            int x = Random.Range(0, selectedVector.x + 1);
-            int y = Random.Range(0, selectedVector.y + 1);
-
-            if (x == 0 && y == 0)
+            if (Random.Range(0f, 100f) < _chanceToAfk)
             {
                 moveDirection = Vector3.zero;
                 return false;
             }
+
+            int x = Random.Range(1, selectedVector.x + 1);
+            int y = Random.Range(1, selectedVector.y + 1);
 
             Vector3 forward = new Vector3(transform.forward.x, 0, transform.forward.z).normalized;
             Vector3 right = new Vector3(transform.right.x, 0, transform.right.z).normalized;
