@@ -25,6 +25,7 @@ namespace Game.Player
         [SerializeField] private Transform _cameraArmTransform;
         [SerializeField] private float _mouseSensitivity = 2f;
         [SerializeField] private Vector2 _verticalAngleLimits = new Vector2(-5f, 80f);
+        [SerializeField] private MovementType _movementType = MovementType.AsPawn;
         [SerializeField] private Transform _moveMarker;
         [SerializeField] private ColliderEventReceiver _enemyDetector;
 
@@ -43,8 +44,6 @@ namespace Game.Player
         {
             _stepDelayTimer = TotalStepTime;
 
-            _enemyDetector.Collider.enabled = false;
-            
             _startSBS.OnTriggerEnterReceive += StartSBS_OnTriggerEnterReceive;
             _endSBS.OnTriggerExitReceive += EndSBS_OnTriggerExitReceive;
             _enemyDetector.OnTriggerEnterReceive += EnemyDetector_OnTriggerEnterReceive;
@@ -104,7 +103,7 @@ namespace Game.Player
         private Vector3 GetMoveDirection()
         {
             
-            MovementType movementType = MovementType.AllSide;
+            MovementType movementType = _movementType;
             return movementType switch
             {
                 MovementType.AsPawn => HaVMove(),
@@ -174,11 +173,8 @@ namespace Game.Player
             _isMoving = true;
 
             _enemyDetector.transform.localPosition = moveDirection;
-            _enemyDetector.Collider.enabled = true;
             yield return null;
             yield return null;
-
-            _enemyDetector.Collider.enabled = false;
             _enemyDetector.transform.localPosition = Vector3.zero;
 
             if (_isEnemyDetected)
