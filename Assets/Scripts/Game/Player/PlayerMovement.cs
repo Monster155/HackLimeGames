@@ -23,35 +23,35 @@ namespace Game.Player
         };
 
         [SerializeField] private Animator _animator;
-        [SerializeField] private float _stepTime = 1f;
-        [SerializeField] private float _stepDelayTime = 0.2f;
         [SerializeField] private ColliderEventReceiver _startSBS;
         [SerializeField] private ColliderEventReceiver _endSBS;
         [SerializeField] private Transform _cameraArmTransform;
         [SerializeField] private float _mouseSensitivity = 2f;
         [SerializeField] private Vector2 _verticalAngleLimits = new Vector2(-5f, 80f);
-        [SerializeField] private MovementType _movementType = MovementType.AsPawn;
         [SerializeField] private MoveMarker _moveMarker;
         [SerializeField] private ColliderEventReceiver _enemyDetector;
         [SerializeField] private int _hp = 5;
         [SerializeField] private int _damage = 1;
 
-        public bool CanMove { get; set; } = true; // sets from StepManager
-        private float TotalStepTime => _stepTime + _stepDelayTime;
+        public int MoveDistanceMultiplier => _movementType is MovementType.AsPawn or MovementType.Horse ? 1 : _currentMoveDistanceMultiplierValue;
+
+        private MovementType _movementType;
+
+        private bool _canMove = true;
+        private bool _isMoving = false;
+        private int _currentMoveDistanceMultiplierValue = 1;
 
         private Vector3 _verticalRotation = Vector3.zero;
 
-        private float _stepDelayTimer;
         private List<Collider> _enemiesAround = new();
+        private float _stepDelayTimer;
 
-        private int _moveDistanceMultiplier = 1;
-        private bool _isMoving = false;
         private List<Collider> _enemiesInMoveZone = new();
         private List<Collider> _obstaclesInMoveZone = new();
 
         private void Start()
         {
-            _stepDelayTimer = TotalStepTime;
+            _stepDelayTimer = GlobalGameSettings.TotalStepTime;
 
             _startSBS.OnTriggerEnterReceive += StartSBS_OnTriggerEnterReceive;
             _endSBS.OnTriggerExitReceive += EndSBS_OnTriggerExitReceive;
@@ -62,23 +62,26 @@ namespace Game.Player
 
             Cursor.visible = false;
             Cursor.lockState = CursorLockMode.Locked;
+
+            _movementType = MovementType.AsPawn;
         }
 
         private void Update()
         {
             _stepDelayTimer += Time.deltaTime;
-            if (_stepDelayTimer >= TotalStepTime)
+            if (_stepDelayTimer >= GlobalGameSettings.TotalStepTime)
             {
                 Move();
             }
 
+            UpdateMoveDistanceMultiplier();
             RotateCamera();
             UpdateMoveMarker();
         }
 
         private void Move()
         {
-            if (!CanMove)
+            if (!_canMove)
                 return;
 
             float v = InputController.Instance.Vertical;
@@ -86,8 +89,19 @@ namespace Game.Player
             if (v > 0)
             {
                 _stepDelayTimer = 0;
-                StartCoroutine(MoveCoroutine(GetMoveDirection() * _moveDistanceMultiplier));
+                StartCoroutine(MoveCoroutine(GetMoveDirection()));
             }
+        }
+
+        private void UpdateMoveDistanceMultiplier()
+        {
+            float scroll = InputController.Instance.MouseScroll;
+            _currentMoveDistanceMultiplierValue = scroll switch
+            {
+                > 0 => Mathf.Min(_currentMoveDistanceMultiplierValue + 1, 4),
+                < 0 => Mathf.Max(_currentMoveDistanceMultiplierValue - 1, 1),
+                _ => _currentMoveDistanceMultiplierValue
+            };
         }
 
         private void RotateCamera()
@@ -139,13 +153,38 @@ namespace Game.Player
             };
 
             OnStepEnd?.Invoke(stepType);
+
+            _canMove = false;
+            yield return new WaitForSeconds(GlobalGameSettings.TotalStepTime);
+
+            _canMove = true;
+
             _isMoving = false;
+        }
+
+        private MovementType GetNextMovementType(MovementType movementType)
+        {
+            //Пешка - Ладья (Замок) - Конь - Слон - Королева
+            switch (movementType)
+            {
+                case MovementType.AsPawn:
+                    return MovementType.HorAndVer;
+                case MovementType.HorAndVer:
+                    return MovementType.Horse;
+                case MovementType.Diagonal:
+                    return MovementType.AllSide;
+                case MovementType.AllSide:
+                    return MovementType.AllSide;
+                case MovementType.Horse:
+                    return MovementType.Diagonal;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
         }
 
         private Vector3 GetMoveDirection()
         {
-            MovementType movementType = _movementType;
-            return movementType switch
+            Vector3 moveDirection = _movementType switch
             {
                 MovementType.AsPawn => HaVMove(),
                 MovementType.HorAndVer => HaVMove(),
@@ -154,6 +193,7 @@ namespace Game.Player
                 MovementType.Horse => HorseMove(),
                 _ => throw new ArgumentOutOfRangeException()
             };
+            return moveDirection * MoveDistanceMultiplier;
         }
 
         #region MovingVariantsMethods
@@ -245,9 +285,9 @@ namespace Game.Player
                 float stepTimer = 0;
                 Vector3 start = transform.position;
                 Vector3 end = transform.position + moveDirection;
-                while (stepTimer < _stepTime / 2)
+                while (stepTimer < GlobalGameSettings.StepTime / 2)
                 {
-                    transform.position = Vector3.Lerp(start, end, stepTimer / (_stepTime / 2));
+                    transform.position = Vector3.Lerp(start, end, stepTimer / (GlobalGameSettings.StepTime / 2));
                     stepTimer += Time.deltaTime;
                     yield return null;
                 }
@@ -256,9 +296,9 @@ namespace Game.Player
                 enemyHP.GetDamage(_damage);
 
                 stepTimer = 0;
-                while (stepTimer < _stepTime / 2)
+                while (stepTimer < GlobalGameSettings.StepTime / 2)
                 {
-                    transform.position = Vector3.Lerp(end, start, stepTimer / (_stepTime / 2));
+                    transform.position = Vector3.Lerp(end, start, stepTimer / (GlobalGameSettings.StepTime / 2));
                     stepTimer += Time.deltaTime;
                     yield return null;
                 }
@@ -271,15 +311,16 @@ namespace Game.Player
                 float stepTimer = 0;
                 Vector3 start = transform.position;
                 Vector3 end = transform.position + moveDirection;
-                while (stepTimer < _stepTime)
+                while (stepTimer < GlobalGameSettings.StepTime)
                 {
-                    transform.position = Vector3.Lerp(start, end, stepTimer / _stepTime);
+                    transform.position = Vector3.Lerp(start, end, stepTimer / GlobalGameSettings.StepTime);
                     stepTimer += Time.deltaTime;
                     yield return null;
                 }
                 transform.position = end;
 
                 enemyHP.GetDamage(_damage);
+                _movementType = GetNextMovementType(_movementType);
             }
         }
 
@@ -290,18 +331,18 @@ namespace Game.Player
             float stepTimer = 0;
             Vector3 start = transform.position;
             Vector3 end = transform.position + moveDirection;
-            while (stepTimer < _stepTime / 2)
+            while (stepTimer < GlobalGameSettings.StepTime / 2)
             {
-                transform.position = Vector3.Lerp(start, end, stepTimer / (_stepTime / 2));
+                transform.position = Vector3.Lerp(start, end, stepTimer / (GlobalGameSettings.StepTime / 2));
                 stepTimer += Time.deltaTime;
                 yield return null;
             }
             transform.position = end;
 
             stepTimer = 0;
-            while (stepTimer < _stepTime / 2)
+            while (stepTimer < GlobalGameSettings.StepTime / 2)
             {
-                transform.position = Vector3.Lerp(end, start, stepTimer / (_stepTime / 2));
+                transform.position = Vector3.Lerp(end, start, stepTimer / (GlobalGameSettings.StepTime / 2));
                 stepTimer += Time.deltaTime;
                 yield return null;
             }
@@ -315,9 +356,9 @@ namespace Game.Player
             float stepTimer = 0;
             Vector3 start = transform.position;
             Vector3 end = transform.position + moveDirection;
-            while (stepTimer < _stepTime)
+            while (stepTimer < GlobalGameSettings.StepTime)
             {
-                transform.position = Vector3.Lerp(start, end, stepTimer / _stepTime);
+                transform.position = Vector3.Lerp(start, end, stepTimer / GlobalGameSettings.StepTime);
                 stepTimer += Time.deltaTime;
                 yield return null;
             }

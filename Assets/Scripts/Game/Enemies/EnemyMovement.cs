@@ -23,21 +23,18 @@ namespace Game.Enemies
         };
 
         [SerializeField] private Animator _animator;
-        [SerializeField] private float _stepTime = 1f;
-        [SerializeField] private float _stepDelayTime = 0.2f;
         [SerializeField] private MovementType _movementType = MovementType.AsPawn;
         [SerializeField] private int _hp = 3;
         [SerializeField] private int _damage = 1;
 
         private bool CanMove => _hp > 0;
-        public float TotalStepTime => _stepTime + _stepDelayTime;
 
         private float _stepDelayTimer;
         private Vector2Int[] _directionVectors;
 
         private void Start()
         {
-            _stepDelayTimer = TotalStepTime;
+            _stepDelayTimer = GlobalGameSettings.TotalStepTime;
             _directionVectors = GetMoveDirection();
         }
 
@@ -50,7 +47,7 @@ namespace Game.Enemies
                 return;
 
             _stepDelayTimer += Time.deltaTime;
-            if (_stepDelayTimer >= TotalStepTime)
+            if (_stepDelayTimer >= GlobalGameSettings.TotalStepTime)
             {
                 if (GetMoveDirection(out Vector3 moveDirection))
                 {
@@ -79,12 +76,16 @@ namespace Game.Enemies
 
         private bool GetMoveDirection(out Vector3 moveDirection)
         {
-            moveDirection = Vector3.zero;
-
             Vector2Int selectedVector = _directionVectors[Random.Range(0, _directionVectors.Length)];
 
             int x = Random.Range(0, selectedVector.x + 1);
             int y = Random.Range(0, selectedVector.y + 1);
+
+            if (x == 0 && y == 0)
+            {
+                moveDirection = Vector3.zero;
+                return false;
+            }
 
             Vector3 forward = new Vector3(transform.forward.x, 0, transform.forward.z).normalized;
             Vector3 right = new Vector3(transform.right.x, 0, transform.right.z).normalized;
@@ -126,9 +127,9 @@ namespace Game.Enemies
                 float stepTimer = 0;
                 Vector3 start = transform.position;
                 Vector3 end = transform.position + moveDirection;
-                while (stepTimer < _stepTime / 2)
+                while (stepTimer < GlobalGameSettings.StepTime / 2)
                 {
-                    transform.position = Vector3.Lerp(start, end, stepTimer / (_stepTime / 2));
+                    transform.position = Vector3.Lerp(start, end, stepTimer / (GlobalGameSettings.StepTime / 2));
                     stepTimer += Time.deltaTime;
                     yield return null;
                 }
@@ -137,9 +138,9 @@ namespace Game.Enemies
                 player.GetDamage(_damage);
 
                 stepTimer = 0;
-                while (stepTimer < _stepTime / 2)
+                while (stepTimer < GlobalGameSettings.StepTime / 2)
                 {
-                    transform.position = Vector3.Lerp(end, start, stepTimer / (_stepTime / 2));
+                    transform.position = Vector3.Lerp(end, start, stepTimer / (GlobalGameSettings.StepTime / 2));
                     stepTimer += Time.deltaTime;
                     yield return null;
                 }
@@ -152,7 +153,7 @@ namespace Game.Enemies
                 float stepTimer = 0;
                 Vector3 start = transform.position;
                 Vector3 end = transform.position + moveDirection;
-                while (stepTimer < _stepTime)
+                while (stepTimer < GlobalGameSettings.StepTime)
                 {
                     transform.position = Vector3.Lerp(start, end, stepTimer);
                     stepTimer += Time.deltaTime;
@@ -169,7 +170,7 @@ namespace Game.Enemies
             float stepTimer = 0;
             Vector3 start = transform.position;
             Vector3 end = transform.position + moveDirection;
-            while (stepTimer < _stepTime)
+            while (stepTimer < GlobalGameSettings.StepTime)
             {
                 transform.position = Vector3.Lerp(start, end, stepTimer);
                 stepTimer += Time.deltaTime;

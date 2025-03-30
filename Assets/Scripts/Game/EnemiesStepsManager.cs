@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections;
+﻿using System.Collections;
 using Game.Enemies;
 using Game.Player;
 using Game.Utils;
@@ -7,13 +6,15 @@ using UnityEngine;
 
 namespace Game
 {
-    public class StepsManager : MonoBehaviour
+    public class EnemiesStepsManager : MonoBehaviour
     {
         [SerializeField] private PlayerMovement _player;
-        [SerializeField] private EnemyMovement[] _enemies;
+        private EnemyMovement[] _enemies;
 
         private void Start()
         {
+            _enemies = FindObjectsByType<EnemyMovement>(FindObjectsSortMode.None);
+            
             _player.OnStepStart += Payer_OnStepStart;
             _player.OnStepEnd += Payer_OnStepEnd;
         }
@@ -26,16 +27,7 @@ namespace Game
             {
                 foreach (EnemyMovement enemy in _enemies)
                     enemy.DoStep(_player);
-
-                StartCoroutine(WaitForEnemyMove());
             }
-        }
-        
-        private IEnumerator WaitForEnemyMove()
-        {
-            _player.CanMove = false;
-            yield return new WaitForSeconds(_enemies[0].TotalStepTime);
-            _player.CanMove = true;
         }
     }
 }
