@@ -43,11 +43,7 @@ namespace Menu
 
             yield return new WaitForSeconds(1.4f);
 
-            while (asyncLoad.progress < 0.9)
-                yield return null;
-
             asyncLoad.allowSceneActivation = true;
-            _loadingScreen.Hide();
         }
     }
 }

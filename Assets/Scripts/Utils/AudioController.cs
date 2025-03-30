@@ -29,5 +29,11 @@ namespace Progression
         {
             _soundSource.PlayOneShot(clip);
         }
+
+        public void SetThemeMusic(AudioClip clip)
+        {
+            _musicSource.clip = clip;
+            _musicSource.Play();
+        }
     }
 }
