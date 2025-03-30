@@ -231,19 +231,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _animator: {fileID: 3011901344494987180}
-  _stepTime: 1
-  _stepDelayTime: 0.2
   _startSBS: {fileID: 7619102317458642944}
   _endSBS: {fileID: 5371002474315905253}
   _cameraArmTransform: {fileID: 76824332607913555}
   _mouseSensitivity: 2
   _verticalAngleLimits: {x: -5, y: 80}
-  _movementType: 0
   _moveMarker: {fileID: 0}
   _enemyDetector: {fileID: 3618010545760244782}
   _hp: 5
   _damage: 100
-  CanMove: 1
 --- !u!1 &3637928999062104860
 GameObject:
   m_ObjectHideFlags: 0
@@ -270,7 +266,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3637928999062104860}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 1
@@ -284,7 +280,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3637928999062104860}
-  m_Mesh: {fileID: 1705324974331375986, guid: 8fc5b2da137000d46a2f20b3de22df62, type: 3}
+  m_Mesh: {fileID: 460233586207928496, guid: 1ffcd66082281da4e8a9cf5f7d0f847a, type: 3}
 --- !u!23 &2287006143212155743
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -308,7 +304,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 18c4bba51682b11408851fda870a61a5, type: 2}
+  - {fileID: 2100000, guid: 31574dddfa46b5447ad77dd3a017a8b0, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
