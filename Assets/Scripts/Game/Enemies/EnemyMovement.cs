@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using Game.Player;
 using Game.Utils;
@@ -27,17 +28,17 @@ namespace Game.Enemies
         [SerializeField] private int _damage = 1;
         [SerializeField] private Collider _collider;
         [SerializeField] private int _chanceToAfk = 10;
-        [SerializeField] private int _jumpRadius = 3;
+        [SerializeField] private int _jumpSquareRadius = 3;
+        [SerializeField] private Transform _startPos;
 
         private bool CanMove => _hp > 0;
 
         private float _stepDelayTimer;
         private Vector2Int[] _directionVectors;
-        private Vector3 _startPos;
+
 
         private void Start()
         {
-            _startPos = transform.position;
             _stepDelayTimer = GlobalGameSettings.TotalStepTime;
             _directionVectors = GetMoveDirection();
         }
@@ -80,22 +81,40 @@ namespace Game.Enemies
 
         private bool GetMoveDirection(out Vector3 moveDirection)
         {
-            Vector2Int selectedVector = _directionVectors[Random.Range(0, _directionVectors.Length)];
-
             if (Random.Range(0f, 100f) < _chanceToAfk)
             {
                 moveDirection = Vector3.zero;
                 return false;
             }
 
-            int x = Random.Range(1, selectedVector.x + 1);
-            int y = Random.Range(1, selectedVector.y + 1);
+            for (int i = 0; i < _directionVectors.Length; i++)
+            {
+                Vector2Int tmp = _directionVectors[i];
+                int r = Random.Range(i, _directionVectors.Length);
+                _directionVectors[i] = _directionVectors[r];
+                _directionVectors[r] = tmp;
+            }
 
-            Vector3 forward = new Vector3(transform.forward.x, 0, transform.forward.z).normalized;
-            Vector3 right = new Vector3(transform.right.x, 0, transform.right.z).normalized;
+            foreach (Vector2Int vector in _directionVectors)
+            {
+                Vector3 forward = new Vector3(transform.forward.x, 0, transform.forward.z).normalized;
+                Vector3 right = new Vector3(transform.right.x, 0, transform.right.z).normalized;
 
-            moveDirection = right * x + forward * y;
-            return true;
+                moveDirection = right * vector.x + forward * vector.y;
+
+                Vector3 deltaPos = (transform.position + moveDirection) - _startPos.position;
+                if (Math.Abs(deltaPos.x) < _jumpSquareRadius && Math.Abs(deltaPos.z) < _jumpSquareRadius)
+                {
+                    if (Physics.Raycast(transform.position + moveDirection + Vector3.up * 5, Vector3.down, out RaycastHit hit, 10))
+                    {
+                        if (!hit.collider.tag.Equals("Obstacle"))
+                            return true;
+                    }
+                }
+            }
+
+            moveDirection = Vector3.zero;
+            return false;
         }
 
         private void Attack(Vector3 moveDirection, PlayerMovement player)

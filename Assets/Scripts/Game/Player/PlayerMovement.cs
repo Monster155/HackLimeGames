@@ -37,7 +37,7 @@ namespace Game.Player
         [SerializeField] private int _damage = 1;
 
         public int MoveDistanceMultiplier => _movementType is MovementType.AsPawn or MovementType.Horse ? 1 : _currentMoveDistanceMultiplierValue;
-        
+
         private MovementType _movementType;
 
         private bool _isMoving = false;
@@ -174,8 +174,9 @@ namespace Game.Player
             };
 
             OnStepEnd?.Invoke(stepType);
-            
-            yield return new WaitForSeconds(GlobalGameSettings.TotalStepTime);
+
+            if (GlobalGameSettings.IsStepByStepMovement)
+                yield return new WaitForSeconds(GlobalGameSettings.TotalStepTime);
 
             _isMoving = false;
         }
