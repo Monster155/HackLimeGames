@@ -215,3 +215,6 @@ MonoBehaviour:
   _hp: 3
   _damage: 100
   _collider: {fileID: 7626444806958952379}
+  _chanceToAfk: 10
+  _jumpSquareRadius: 3
+  _startPos: {fileID: 0}
