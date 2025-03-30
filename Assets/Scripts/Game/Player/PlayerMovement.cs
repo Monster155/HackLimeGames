@@ -1,14 +1,19 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using Game.Enemies;
 using Game.Utils;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Utils;
 
 namespace Game.Player
 {
     public class PlayerMovement : MonoBehaviour
     {
+        public event Action<StepType> OnStepStart;
+        public event Action<StepType> OnStepEnd;
+
         private readonly Vector3[] HorAndVerVectors = { Vector3.forward, Vector3.right, Vector3.back, Vector3.left };
         private readonly Vector3[] DiaglonalVectors = { new Vector3(1, 0, 1), new Vector3(-1, 0, 1), new Vector3(1, 0, -1), new Vector3(-1, 0, -1) };
         private readonly Vector3[] HorseVectors =
@@ -18,64 +23,85 @@ namespace Game.Player
         };
 
         [SerializeField] private Animator _animator;
-        [SerializeField] private float _stepTime = 1f;
-        [SerializeField] private float _stepDelayTime = 0.2f;
         [SerializeField] private ColliderEventReceiver _startSBS;
         [SerializeField] private ColliderEventReceiver _endSBS;
         [SerializeField] private Transform _cameraArmTransform;
         [SerializeField] private float _mouseSensitivity = 2f;
         [SerializeField] private Vector2 _verticalAngleLimits = new Vector2(-5f, 80f);
-        [SerializeField] private MovementType _movementType = MovementType.AsPawn;
-        [SerializeField] private Transform _moveMarker;
+        [SerializeField] private MoveMarker _moveMarker;
         [SerializeField] private ColliderEventReceiver _enemyDetector;
+        [SerializeField] private int _hp = 5;
+        [SerializeField] private int _damage = 1;
 
-        private float TotalStepTime => _stepTime + _stepDelayTime;
+        public int MoveDistanceMultiplier => _movementType is MovementType.AsPawn or MovementType.Horse ? 1 : _currentMoveDistanceMultiplierValue;
+
+        private MovementType _movementType;
+
+        private bool _canMove = true;
+        private bool _isMoving = false;
+        private int _currentMoveDistanceMultiplierValue = 1;
 
         private Vector3 _verticalRotation = Vector3.zero;
 
-        private float _stepDelayTimer;
         private List<Collider> _enemiesAround = new();
+        private float _stepDelayTimer;
 
-        private int _moveDistanceMultiplier = 1;
-        private bool _isMoving = false;
-        private bool _isEnemyDetected = false;
+        private List<Collider> _enemiesInMoveZone = new();
+        private List<Collider> _obstaclesInMoveZone = new();
 
         private void Start()
         {
-            _stepDelayTimer = TotalStepTime;
+            _stepDelayTimer = GlobalGameSettings.TotalStepTime;
 
             _startSBS.OnTriggerEnterReceive += StartSBS_OnTriggerEnterReceive;
             _endSBS.OnTriggerExitReceive += EndSBS_OnTriggerExitReceive;
             _enemyDetector.OnTriggerEnterReceive += EnemyDetector_OnTriggerEnterReceive;
+            _enemyDetector.OnTriggerExitReceive += EnemyDetector_OnTriggerExitReceive;
 
             _verticalRotation = _cameraArmTransform.localRotation.eulerAngles;
 
             Cursor.visible = false;
             Cursor.lockState = CursorLockMode.Locked;
+
+            _movementType = MovementType.AsPawn;
         }
 
         private void Update()
         {
             _stepDelayTimer += Time.deltaTime;
-            if (_stepDelayTimer >= TotalStepTime)
+            if (_stepDelayTimer >= GlobalGameSettings.TotalStepTime)
             {
                 Move();
             }
 
+            UpdateMoveDistanceMultiplier();
             RotateCamera();
             UpdateMoveMarker();
         }
 
         private void Move()
         {
+            if (!_canMove)
+                return;
+
             float v = InputController.Instance.Vertical;
 
             if (v > 0)
             {
-                _animator.SetTrigger(AnimHashes.MoveHash);
                 _stepDelayTimer = 0;
-                StartCoroutine(MoveCoroutine(GetMoveDirection() * _moveDistanceMultiplier));
+                StartCoroutine(MoveCoroutine(GetMoveDirection()));
             }
+        }
+
+        private void UpdateMoveDistanceMultiplier()
+        {
+            float scroll = InputController.Instance.MouseScroll;
+            _currentMoveDistanceMultiplierValue = scroll switch
+            {
+                > 0 => Mathf.Min(_currentMoveDistanceMultiplierValue + 1, 4),
+                < 0 => Mathf.Max(_currentMoveDistanceMultiplierValue - 1, 1),
+                _ => _currentMoveDistanceMultiplierValue
+            };
         }
 
         private void RotateCamera()
@@ -97,14 +123,68 @@ namespace Game.Player
             if (_isMoving)
                 return;
 
-            _moveMarker.localPosition = transform.position + GetMoveDirection();
+            Vector3 newPos = transform.position + GetMoveDirection();
+            _moveMarker.UpdateContent(newPos);
+            _enemyDetector.transform.position = newPos;
+        }
+
+        private IEnumerator MoveCoroutine(Vector3 moveDirection)
+        {
+            _isMoving = true;
+            _animator.transform.rotation = Quaternion.LookRotation(moveDirection);
+
+            StepType stepType;
+
+            if (_obstaclesInMoveZone.Count > 0)
+                stepType = StepType.MoveBlocked;
+            else if (_enemiesInMoveZone.Count > 0)
+                stepType = StepType.Attack;
+            else
+                stepType = StepType.Move;
+
+            OnStepStart?.Invoke(stepType);
+
+            yield return stepType switch
+            {
+                StepType.Move => MoveAllowedCoroutine(moveDirection),
+                StepType.Attack => AttackCoroutine(moveDirection),
+                StepType.MoveBlocked => MoveBlockedCoroutine(moveDirection),
+                _ => throw new ArgumentOutOfRangeException()
+            };
+
+            OnStepEnd?.Invoke(stepType);
+
+            _canMove = false;
+            yield return new WaitForSeconds(GlobalGameSettings.TotalStepTime);
+
+            _canMove = true;
+
+            _isMoving = false;
+        }
+
+        private MovementType GetNextMovementType(MovementType movementType)
+        {
+            //Пешка - Ладья (Замок) - Конь - Слон - Королева
+            switch (movementType)
+            {
+                case MovementType.AsPawn:
+                    return MovementType.HorAndVer;
+                case MovementType.HorAndVer:
+                    return MovementType.Horse;
+                case MovementType.Diagonal:
+                    return MovementType.AllSide;
+                case MovementType.AllSide:
+                    return MovementType.AllSide;
+                case MovementType.Horse:
+                    return MovementType.Diagonal;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
         }
 
         private Vector3 GetMoveDirection()
         {
-            
-            MovementType movementType = _movementType;
-            return movementType switch
+            Vector3 moveDirection = _movementType switch
             {
                 MovementType.AsPawn => HaVMove(),
                 MovementType.HorAndVer => HaVMove(),
@@ -113,7 +193,10 @@ namespace Game.Player
                 MovementType.Horse => HorseMove(),
                 _ => throw new ArgumentOutOfRangeException()
             };
+            return moveDirection * MoveDistanceMultiplier;
         }
+
+        #region MovingVariantsMethods
 
         private Vector3 HorseMove()
         {
@@ -168,61 +251,114 @@ namespace Game.Player
             return distToHaV < distToDiag ? closestHaVVector : closestDiagVector;
         }
 
-        private IEnumerator MoveCoroutine(Vector3 moveDirection)
+        #endregion
+
+        public bool IsAliveAfterDamage(int damage)
         {
-            _isMoving = true;
+            return _hp - damage > 0;
+        }
 
-            _enemyDetector.transform.localPosition = moveDirection;
-            yield return null;
-            yield return null;
-            _enemyDetector.transform.localPosition = Vector3.zero;
+        public void GetDamage(int damage)
+        {
+            _hp -= damage;
+            if (_hp <= 0)
+                StartCoroutine(DeadCoroutine());
+        }
 
-            if (_isEnemyDetected)
-                yield return MoveBlockedCoroutine(moveDirection);
+        private IEnumerator DeadCoroutine()
+        {
+            _animator.SetTrigger(AnimHashes.DeadHash);
+            // do fade screen with GAME OVER text
+            yield return new WaitForSeconds(2f);
+
+            SceneManager.LoadScene("GameScene");
+        }
+
+        private IEnumerator AttackCoroutine(Vector3 moveDirection)
+        {
+            EnemyMovement enemyHP = _enemiesInMoveZone[0].GetComponentInParent<EnemyMovement>();
+
+            if (enemyHP.IsAliveAfterDamage(_damage))
+            {
+                _animator.SetTrigger(AnimHashes.AttackHash);
+
+                float stepTimer = 0;
+                Vector3 start = transform.position;
+                Vector3 end = transform.position + moveDirection;
+                while (stepTimer < GlobalGameSettings.StepTime / 2)
+                {
+                    transform.position = Vector3.Lerp(start, end, stepTimer / (GlobalGameSettings.StepTime / 2));
+                    stepTimer += Time.deltaTime;
+                    yield return null;
+                }
+                transform.position = end;
+
+                enemyHP.GetDamage(_damage);
+
+                stepTimer = 0;
+                while (stepTimer < GlobalGameSettings.StepTime / 2)
+                {
+                    transform.position = Vector3.Lerp(end, start, stepTimer / (GlobalGameSettings.StepTime / 2));
+                    stepTimer += Time.deltaTime;
+                    yield return null;
+                }
+                transform.position = start;
+            }
             else
-                yield return MoveAllowedCoroutine(moveDirection);
+            {
+                _animator.SetTrigger(AnimHashes.FatalAttackHash);
 
-            _isEnemyDetected = false;
+                float stepTimer = 0;
+                Vector3 start = transform.position;
+                Vector3 end = transform.position + moveDirection;
+                while (stepTimer < GlobalGameSettings.StepTime)
+                {
+                    transform.position = Vector3.Lerp(start, end, stepTimer / GlobalGameSettings.StepTime);
+                    stepTimer += Time.deltaTime;
+                    yield return null;
+                }
+                transform.position = end;
 
-            EventSystem.OnPlayerFinishedMoving?.Invoke();
-            _isMoving = false;
+                enemyHP.GetDamage(_damage);
+                _movementType = GetNextMovementType(_movementType);
+            }
         }
 
         private IEnumerator MoveBlockedCoroutine(Vector3 moveDirection)
         {
+            _animator.SetTrigger(AnimHashes.MoveHash);
+
             float stepTimer = 0;
             Vector3 start = transform.position;
             Vector3 end = transform.position + moveDirection;
-            while (stepTimer < _stepTime / 2)
+            while (stepTimer < GlobalGameSettings.StepTime / 2)
             {
-                transform.position = Vector3.Lerp(start, end, stepTimer / (_stepTime / 2));
+                transform.position = Vector3.Lerp(start, end, stepTimer / (GlobalGameSettings.StepTime / 2));
                 stepTimer += Time.deltaTime;
                 yield return null;
             }
             transform.position = end;
 
             stepTimer = 0;
-            while (stepTimer < _stepTime / 2)
+            while (stepTimer < GlobalGameSettings.StepTime / 2)
             {
-                transform.position = Vector3.Lerp(end, start, stepTimer / (_stepTime / 2));
+                transform.position = Vector3.Lerp(end, start, stepTimer / (GlobalGameSettings.StepTime / 2));
                 stepTimer += Time.deltaTime;
                 yield return null;
             }
             transform.position = start;
-            
-            EventSystem.OnPlayerStartsMoving?.Invoke();
         }
 
         private IEnumerator MoveAllowedCoroutine(Vector3 moveDirection)
         {
-            EventSystem.OnPlayerStartsMoving?.Invoke();
-            
+            _animator.SetTrigger(AnimHashes.MoveHash);
+
             float stepTimer = 0;
             Vector3 start = transform.position;
             Vector3 end = transform.position + moveDirection;
-            while (stepTimer < _stepTime)
+            while (stepTimer < GlobalGameSettings.StepTime)
             {
-                transform.position = Vector3.Lerp(start, end, stepTimer / _stepTime);
+                transform.position = Vector3.Lerp(start, end, stepTimer / GlobalGameSettings.StepTime);
                 stepTimer += Time.deltaTime;
                 yield return null;
             }
@@ -252,10 +388,28 @@ namespace Game.Player
 
         private void EnemyDetector_OnTriggerEnterReceive(Collider other)
         {
-            if (!other.tag.Equals("Enemy"))
-                return;
+            switch (other.tag)
+            {
+                case "Enemy":
+                    _enemiesInMoveZone.Add(other);
+                    break;
+                case "Obstacle":
+                    _obstaclesInMoveZone.Add(other);
+                    break;
+            }
+        }
 
-            _isEnemyDetected = true;
+        private void EnemyDetector_OnTriggerExitReceive(Collider other)
+        {
+            switch (other.tag)
+            {
+                case "Enemy":
+                    _enemiesInMoveZone.Remove(other);
+                    break;
+                case "Obstacle":
+                    _obstaclesInMoveZone.Remove(other);
+                    break;
+            }
         }
     }
 }

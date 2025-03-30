@@ -238,8 +238,12 @@ MonoBehaviour:
   _cameraArmTransform: {fileID: 76824332607913555}
   _mouseSensitivity: 2
   _verticalAngleLimits: {x: -5, y: 80}
+  _movementType: 0
   _moveMarker: {fileID: 0}
   _enemyDetector: {fileID: 3618010545760244782}
+  _hp: 5
+  _damage: 100
+  CanMove: 1
 --- !u!1 &3637928999062104860
 GameObject:
   m_ObjectHideFlags: 0
