@@ -13,7 +13,6 @@ namespace Game.Enemies
     {
         // TODO combine Player and Enemy movements due to same code
 
-        private readonly int MaxMoveDistance = 4;
         private readonly Vector2Int[] HorAndVerVectors = { Vector2Int.up, Vector2Int.right, Vector2Int.down, Vector2Int.left };
         private readonly Vector2Int[] DiaglonalVectors = { new Vector2Int(1, 1), new Vector2Int(-1, 1), new Vector2Int(1, -1), new Vector2Int(-1, -1) };
         private readonly Vector2Int[] HorseVectors =
@@ -26,6 +25,7 @@ namespace Game.Enemies
         [SerializeField] private MovementType _movementType = MovementType.AsPawn;
         [SerializeField] private int _hp = 3;
         [SerializeField] private int _damage = 1;
+        [SerializeField] private Collider _collider;
 
         private bool CanMove => _hp > 0;
 
@@ -110,9 +110,9 @@ namespace Game.Enemies
             return _movementType switch
             {
                 MovementType.AsPawn => HorAndVerVectors,
-                MovementType.HorAndVer => HorAndVerVectors.Select(v => v * MaxMoveDistance).ToArray(),
-                MovementType.Diagonal => DiaglonalVectors.Select(v => v * MaxMoveDistance).ToArray(),
-                MovementType.AllSide => HorAndVerVectors.Concat(DiaglonalVectors).Select(v => v * MaxMoveDistance).ToArray(),
+                MovementType.HorAndVer => HorAndVerVectors.Select(v => v * GlobalGameSettings.EnemyMaxMoveDistance).ToArray(),
+                MovementType.Diagonal => DiaglonalVectors.Select(v => v * GlobalGameSettings.EnemyMaxMoveDistance).ToArray(),
+                MovementType.AllSide => HorAndVerVectors.Concat(DiaglonalVectors).Select(v => v * GlobalGameSettings.EnemyMaxMoveDistance).ToArray(),
                 MovementType.Horse => HorseVectors,
                 _ => throw new ArgumentOutOfRangeException()
             };
@@ -188,7 +188,11 @@ namespace Game.Enemies
         {
             _hp -= damage;
             if (_hp <= 0)
+            {
                 _animator.SetTrigger(AnimHashes.DeadHash);
+                enabled = false;
+                _collider.enabled = false;
+            }
         }
     }
 }

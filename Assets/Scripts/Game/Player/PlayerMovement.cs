@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using Game.Enemies;
 using Game.Utils;
 using UnityEngine;
@@ -29,6 +30,8 @@ namespace Game.Player
         [SerializeField] private float _mouseSensitivity = 2f;
         [SerializeField] private Vector2 _verticalAngleLimits = new Vector2(-5f, 80f);
         [SerializeField] private MoveMarker _moveMarker;
+        [SerializeField] private Transform _obstaclesDetectorsContainer;
+        [SerializeField] private ColliderEventReceiver _obstaclesDetectorPrefab;
         [SerializeField] private ColliderEventReceiver _enemyDetector;
         [SerializeField] private int _hp = 5;
         [SerializeField] private int _damage = 1;
@@ -37,7 +40,6 @@ namespace Game.Player
 
         private MovementType _movementType;
 
-        private bool _canMove = true;
         private bool _isMoving = false;
         private int _currentMoveDistanceMultiplierValue = 1;
 
@@ -49,12 +51,24 @@ namespace Game.Player
         private List<Collider> _enemiesInMoveZone = new();
         private List<Collider> _obstaclesInMoveZone = new();
 
+        private List<ColliderEventReceiver> _obstaclesDetectors = new();
+
         private void Start()
         {
             _stepDelayTimer = GlobalGameSettings.TotalStepTime;
 
             _startSBS.OnTriggerEnterReceive += StartSBS_OnTriggerEnterReceive;
             _endSBS.OnTriggerExitReceive += EndSBS_OnTriggerExitReceive;
+
+            for (int i = 0; i < GlobalGameSettings.PlayerMaxMoveDistance; i++)
+            {
+                ColliderEventReceiver detector = Instantiate(_obstaclesDetectorPrefab, _obstaclesDetectorsContainer);
+                _obstaclesDetectors.Add(detector);
+
+                detector.OnTriggerEnterReceive += ObstaclesDetector_OnTriggerEnterReceive;
+                detector.OnTriggerExitReceive += ObstaclesDetector_OnTriggerExitReceive;
+            }
+
             _enemyDetector.OnTriggerEnterReceive += EnemyDetector_OnTriggerEnterReceive;
             _enemyDetector.OnTriggerExitReceive += EnemyDetector_OnTriggerExitReceive;
 
@@ -68,20 +82,20 @@ namespace Game.Player
 
         private void Update()
         {
+            UpdateMoveDistanceMultiplier();
+            RotateCamera();
+            UpdateMoveMarker();
+
             _stepDelayTimer += Time.deltaTime;
             if (_stepDelayTimer >= GlobalGameSettings.TotalStepTime)
             {
                 Move();
             }
-
-            UpdateMoveDistanceMultiplier();
-            RotateCamera();
-            UpdateMoveMarker();
         }
 
         private void Move()
         {
-            if (!_canMove)
+            if (_isMoving)
                 return;
 
             float v = InputController.Instance.Vertical;
@@ -89,7 +103,7 @@ namespace Game.Player
             if (v > 0)
             {
                 _stepDelayTimer = 0;
-                StartCoroutine(MoveCoroutine(GetMoveDirection()));
+                StartCoroutine(MoveCoroutine(GetMoveDirection() * MoveDistanceMultiplier));
             }
         }
 
@@ -98,7 +112,7 @@ namespace Game.Player
             float scroll = InputController.Instance.MouseScroll;
             _currentMoveDistanceMultiplierValue = scroll switch
             {
-                > 0 => Mathf.Min(_currentMoveDistanceMultiplierValue + 1, 4),
+                > 0 => Mathf.Min(_currentMoveDistanceMultiplierValue + 1, GlobalGameSettings.PlayerMaxMoveDistance),
                 < 0 => Mathf.Max(_currentMoveDistanceMultiplierValue - 1, 1),
                 _ => _currentMoveDistanceMultiplierValue
             };
@@ -123,9 +137,17 @@ namespace Game.Player
             if (_isMoving)
                 return;
 
-            Vector3 newPos = transform.position + GetMoveDirection();
+            Vector3 moveDirection = GetMoveDirection();
+
+            Vector3 newPos = transform.position + moveDirection * MoveDistanceMultiplier;
             _moveMarker.UpdateContent(newPos);
+
             _enemyDetector.transform.position = newPos;
+
+            for (int i = 0; i < MoveDistanceMultiplier; i++)
+                _obstaclesDetectors[i].transform.position = transform.position + moveDirection * (i + 1);
+            for (int i = MoveDistanceMultiplier; i < _obstaclesDetectors.Count; i++)
+                _obstaclesDetectors[i].transform.position = transform.position;
         }
 
         private IEnumerator MoveCoroutine(Vector3 moveDirection)
@@ -134,6 +156,8 @@ namespace Game.Player
             _animator.transform.rotation = Quaternion.LookRotation(moveDirection);
 
             StepType stepType;
+
+            _enemiesInMoveZone = _enemiesInMoveZone.Where(c => c.GetComponentInParent<EnemyMovement>() != null).ToList();
 
             if (_obstaclesInMoveZone.Count > 0)
                 stepType = StepType.MoveBlocked;
@@ -154,10 +178,7 @@ namespace Game.Player
 
             OnStepEnd?.Invoke(stepType);
 
-            _canMove = false;
             yield return new WaitForSeconds(GlobalGameSettings.TotalStepTime);
-
-            _canMove = true;
 
             _isMoving = false;
         }
@@ -193,7 +214,7 @@ namespace Game.Player
                 MovementType.Horse => HorseMove(),
                 _ => throw new ArgumentOutOfRangeException()
             };
-            return moveDirection * MoveDistanceMultiplier;
+            return moveDirection;
         }
 
         #region MovingVariantsMethods
@@ -267,6 +288,7 @@ namespace Game.Player
 
         private IEnumerator DeadCoroutine()
         {
+            _isMoving = true;
             _animator.SetTrigger(AnimHashes.DeadHash);
             // do fade screen with GAME OVER text
             yield return new WaitForSeconds(2f);
@@ -388,28 +410,26 @@ namespace Game.Player
 
         private void EnemyDetector_OnTriggerEnterReceive(Collider other)
         {
-            switch (other.tag)
-            {
-                case "Enemy":
-                    _enemiesInMoveZone.Add(other);
-                    break;
-                case "Obstacle":
-                    _obstaclesInMoveZone.Add(other);
-                    break;
-            }
+            if (other.tag.Equals("Enemy"))
+                _enemiesInMoveZone.Add(other);
         }
 
         private void EnemyDetector_OnTriggerExitReceive(Collider other)
         {
-            switch (other.tag)
-            {
-                case "Enemy":
-                    _enemiesInMoveZone.Remove(other);
-                    break;
-                case "Obstacle":
-                    _obstaclesInMoveZone.Remove(other);
-                    break;
-            }
+            if (other.tag.Equals("Enemy"))
+                _enemiesInMoveZone.Remove(other);
+        }
+
+        private void ObstaclesDetector_OnTriggerEnterReceive(Collider other)
+        {
+            if (other.tag.Equals("Obstacle"))
+                _obstaclesInMoveZone.Add(other);
+        }
+
+        private void ObstaclesDetector_OnTriggerExitReceive(Collider other)
+        {
+            if (other.tag.Equals("Obstacle"))
+                _obstaclesInMoveZone.Remove(other);
         }
     }
 }

@@ -211,8 +211,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _animator: {fileID: 8492171614692863703}
-  _stepTime: 1
-  _stepDelayTime: 0.2
   _movementType: 3
   _hp: 3
   _damage: 100
+  _collider: {fileID: 7626444806958952379}
